@@ -2,10 +2,10 @@
   <div>
     <input type="text" class="todo-input" placeholder="What needs to be done" v-model="newTodo" @keyup.enter="addTodo">
     <div v-if="isLoading">Loading...</div>
-    <transition-group name="fade" enter-active-class="animated fadeInUp" leave-active-class="animated fadeOutDown">
+    <transition-group v-else name="fade" enter-active-class="animated fadeInUp" leave-active-class="animated fadeOutDown">
       <div v-for="todo in todosFiltered" :key="todo.id" class="todo-item">
         <div class="todo-item-left">
-          <input type="checkbox" v-model="todo.completed">
+          <input type="checkbox" v-model="todo.completed" @change=checkTodo(todo)>
           <div v-if="!todo.editing" @dblclick="editTodo(todo)" class="todo-item-label" :class="{ completed : todo.completed }">{{ todo.title }}</div>
           <input v-else class="todo-item-edit" type="text" v-model="todo.title" @blur="doneEdit(todo)" @keyup.enter="doneEdit(todo)" @keyup.esc="cancelEdit(todo)" v-focus>
         </div>
@@ -38,28 +38,30 @@
 </template>
 
 <script>
+import axios from 'axios'
+
 export default {
   name: 'todo-list',
+  created() {
+    this.isLoading = true
+    axios.get('/api/todos')
+      .then(response => {
+        this.todos = response.data
+        this.isLoading = false
+      })
+      .catch(error => {
+        console.log(error.response)
+      })
+
+  },
   data () {
     return {
       newTodo: '',
       idForTodo: 3,
       beforeEditCache: '',
       filter: 'all',
-      todos: [
-        {
-          'id': 1,
-          'title': 'Finish Vue Screencast',
-          'completed': false,
-          'editing': false,
-        },
-        {
-          'id': 2,
-          'title': 'Take over world',
-          'completed': false,
-          'editing': false,
-        },
-      ]
+      todos: [],
+      isLoading: false,
     }
   },
   computed: {
@@ -101,12 +103,15 @@ export default {
         return
       }
 
-        this.todos.push({
-          id: this.idForTodo,
-          title: this.newTodo,
-          completed: false,
-          editing: false,
-        })
+        axios.post('/api/todos', { data: this.newTodo })
+          .then(response => {
+            this.todos.push({
+              id: response.data.id,
+              title: response.data.title,
+              completed: false,
+              editing: false,
+            })
+          })
 
         this.newTodo = ''
     },
@@ -123,6 +128,8 @@ export default {
         todo.title = this.beforeEditCache
       }
       todo.editing = false
+
+      axios.patch(`/api/todos/${todo.id}`, { data: todo })
     },
 
     // Edit todo
@@ -133,7 +140,10 @@ export default {
 
     // Delete todo
     removeTodo(id) {
-      this.todos = this.todos.filter(todo => id !== todo.id)
+      axios.delete(`/api/todos/${id}`)
+        .then(response => {
+          this.todos = this.todos.filter(todo => id !== todo.id)
+        })
     },
 
     // Check all todos
@@ -145,6 +155,10 @@ export default {
     clearCompleted() {
       this.todos = this.todos.filter(todo => !todo.completed)
     },
+
+    checkTodo(todo) {
+      axios.patch(`/api/todos/${todo.id}`, { data: todo })
+    }
   }
 }
 </script>
